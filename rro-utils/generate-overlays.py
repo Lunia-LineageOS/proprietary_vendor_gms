@@ -136,6 +136,79 @@ def apply_exclude_tags(overlay_dir: Path):
             tree.write(str(xml_file), encoding='unicode')
 
 
+def merge_split_drawables(overlay_dir: Path):
+    android_ns = 'http://schemas.android.com/apk/res/android'
+    aapt_ns = 'http://schemas.android.com/aapt'
+    ET.register_namespace('android', android_ns)
+    ET.register_namespace('aapt', aapt_ns)
+    prefixes = {android_ns: 'android', aapt_ns: 'aapt'}
+
+    def prefixed_name(qname):
+        if qname.startswith('{'):
+            uri, local = qname[1:].split('}', 1)
+            return f'{prefixes.get(uri, uri)}:{local}'
+        return qname
+
+    def to_aapt2_style(root):
+        def move_xmlns(m):
+            ns = re.findall(r'xmlns:\w+="[^"]*"', m[2])
+            if not ns:
+                return m[0]
+            ns.sort(key=lambda s: 'xmlns:android' not in s)  # android before aapt
+            attrs = re.sub(r'\s*xmlns:\w+="[^"]*"', '', m[2]).strip()
+            return f'{m[1]} {attrs}\n  {" ".join(ns)}>'
+
+        body = re.sub(
+            r'(<[\w-]+)([^>]*)>', move_xmlns, ET.tostring(root, encoding='unicode'), count=1
+        )
+        return f'<?xml version="1.0" encoding="utf-8"?>\n{body}\n'
+
+    def fold_references(tree, stem, inner):
+        matches = [
+            (el, attr)
+            for el in tree.iter()
+            for attr, val in el.attrib.items()
+            if val.startswith('@') and val.partition('/')[2] == stem
+        ]
+        for el, attr in matches:
+            idx = list(el.attrib).index(attr)  # where the attribute sat
+            aapt_attr = ET.Element(f'{{{aapt_ns}}}attr')
+            aapt_attr.set('name', prefixed_name(attr))
+            aapt_attr.append(copy.deepcopy(inner))
+            el.insert(idx, aapt_attr)
+            del el.attrib[attr]
+        return bool(matches)
+
+    def fold_child(child):
+        try:
+            inner = ET.parse(child).getroot()
+        except ET.ParseError:
+            return False
+        folded = False
+        for xml_file in overlay_dir.rglob('*.xml'):
+            if xml_file == child:
+                continue
+            try:
+                text = xml_file.read_text(encoding='utf-8')
+            except (UnicodeDecodeError, OSError):
+                continue
+            if child.stem not in text:  # cheap filter + skips non-XML resources
+                continue
+            try:
+                tree = ET.parse(xml_file)
+            except ET.ParseError:
+                continue
+            if fold_references(tree, child.stem, inner):
+                ET.indent(tree, space='    ')
+                xml_file.write_text(to_aapt2_style(tree.getroot()), encoding='utf-8')
+                folded = True
+        return folded
+
+    for child in list(overlay_dir.rglob('$*__*.xml')):
+        if fold_child(child):
+            child.unlink()
+
+
 def remove_meta_files(overlay_dir: Path):
     for f in overlay_dir.rglob('.overlay-meta.json'):
         f.unlink()
@@ -197,6 +270,7 @@ def main():
     for apk in overlay_dir.glob('*.apk'):
         apk.unlink()
 
+    merge_split_drawables(overlay_dir)
     delete_excluded_files(overlay_dir)
     rename_dollar_files(overlay_dir)
     apply_exclude_tags(overlay_dir)
