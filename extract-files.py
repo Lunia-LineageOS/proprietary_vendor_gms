@@ -35,6 +35,32 @@ PRODUCT_MK = COMMON_DIR / 'common-vendor.mk'
 GENERATE_OVERLAYS_PY = REPO_ROOT / 'rro-utils' / 'generate-overlays.py'
 OVERLAY_DIR = COMMON_DIR / 'proprietary' / 'product' / 'overlay'
 
+APEX_BP_PROPERTIES = {
+    'com.google.android.gmssystem.prodvic': {
+        'apps': ['PrebuiltGmsCoreVic'],
+        'product_specific': True,
+    },
+}
+
+
+def _bp_value(value):
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, list):
+        return '[' + ', '.join(f'"{v}"' for v in value) + ']'
+    return f'"{value}"'
+
+
+def inject_apex_bp_properties():
+    if not ANDROID_BP.is_file():
+        return
+    bp = ANDROID_BP.read_text()
+    for module, props in APEX_BP_PROPERTIES.items():
+        needle = f'name: "{module}",'
+        extra = ''.join(f'\n    {k}: {_bp_value(v)},' for k, v in props.items())
+        bp = bp.replace(needle, needle + extra, 1)
+    ANDROID_BP.write_text(bp)
+
 
 def append_overlays_include():
     if not PRODUCT_MK.is_file():
@@ -102,6 +128,7 @@ if __name__ == '__main__':
     utils = ExtractUtils.device(module)
     utils.run()
 
+    inject_apex_bp_properties()
     append_overlays_include()
 
     if not any(a in ('--regenerate_makefiles', '-m') for a in sys.argv):

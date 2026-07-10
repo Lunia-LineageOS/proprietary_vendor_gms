@@ -85,6 +85,7 @@ product/priv-app/Velvet/Velvet.apk;OVERRIDES=QuickSearchBox;PRESIGNED
 product/etc/permissions/velvet_app-privapp-permissions.xml
 
 # Google Play
+product/apex/com.google.android.gmssystem.prodvic.apex:system/apex/com.google.android.gmssystem.prodvic.apex
 product/priv-app/ConfigUpdater/ConfigUpdater.apk;OVERRIDES=SimpleDeviceConfig,SimpleSettingsConfig,SimpleDeviceConfigOverlayGs201;PRESIGNED
 product/priv-app/Phonesky/Phonesky.apk;OVERRIDES=GoogleParts,StatementService;PRESIGNED
 product/priv-app/PrebuiltGmsCore/app_chimera/m/PrebuiltGmsCoreVic_AdsDynamite/PrebuiltGmsCoreVic_AdsDynamite.apk;PRESIGNED
