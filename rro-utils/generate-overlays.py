@@ -27,6 +27,12 @@ _BEAUTIFY_SKIP_OVERLAYS = {
     'TelecomOverlayDeprecatedGoogle',
 }
 
+_TARGET_PACKAGE_NAMES = {
+    'AvatarPickerPixelOverlay': 'com.google.android.avatarpicker',
+    'MediaProviderOverlay': 'com.google.android.providers.media.module',
+    'PixelDocumentsUIGoogleOverlay': 'com.google.android.documentsui',
+}
+
 _EXCLUDED_FILENAMES = {
     'ic_launcher_phone.png',
     'ic_qs_branded_vpn.xml',
@@ -209,6 +215,17 @@ def merge_split_drawables(overlay_dir: Path):
             child.unlink()
 
 
+def inject_bp_target_packages(overlay_dir: Path):
+    for name, target in _TARGET_PACKAGE_NAMES.items():
+        bp = overlay_dir / name / 'Android.bp'
+        if not bp.is_file():
+            continue
+        body = bp.read_text().rstrip()
+        if not body.endswith('}'):
+            continue
+        bp.write_text(f'{body[:-1].rstrip()}\n    target_package_name: "{target}",\n}}\n')
+
+
 def remove_meta_files(overlay_dir: Path):
     for f in overlay_dir.rglob('.overlay-meta.json'):
         f.unlink()
@@ -282,6 +299,7 @@ def main():
         if not (overlay_subdir / 'Android.bp').is_file():
             continue
         _run(BEAUTIFY_RRO_PY, str(overlay_subdir))
+    inject_bp_target_packages(overlay_dir)
     apply_text_substitutions(overlay_dir)
     remove_meta_files(overlay_dir)
     write_overlays_mk(overlay_dir)
