@@ -228,6 +228,17 @@ def inject_bp_target_packages(overlay_dir: Path):
         bp.write_text(f'{body[:-1].rstrip()}\n    target_package_name: "{target}",\n}}\n')
 
 
+def inject_bp_overrides(overlay_dir: Path):
+    # Device trees ship overlays with the same package name as these, which
+    # makes the framework and PackageManager disagree on which one is used.
+    for bp in overlay_dir.glob('*GMS/Android.bp'):
+        body = bp.read_text().rstrip()
+        if not body.endswith('}'):
+            continue
+        original = bp.parent.name.removesuffix('GMS')
+        bp.write_text(f'{body[:-1].rstrip()}\n    overrides: ["{original}"],\n}}\n')
+
+
 def remove_meta_files(overlay_dir: Path):
     for f in overlay_dir.rglob('.overlay-meta.json'):
         f.unlink()
@@ -302,6 +313,7 @@ def main():
             continue
         _run(BEAUTIFY_RRO_PY, str(overlay_subdir))
     inject_bp_target_packages(overlay_dir)
+    inject_bp_overrides(overlay_dir)
     apply_text_substitutions(overlay_dir)
     remove_meta_files(overlay_dir)
     write_overlays_mk(overlay_dir)
